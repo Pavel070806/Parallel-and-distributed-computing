@@ -1,0 +1,124 @@
+#include <iostream>
+#include <thread>
+#include <vector>
+#include <cmath>
+#include <chrono>
+#include <random>
+#include <mutex>
+#include <atomic>
+
+using namespace std;
+using namespace std::chrono;
+
+const long long n = 10000000;
+const int thread_count = 8;
+long long sum = 0;
+int arr[n];
+vector<int> result(thread_count, 0);
+atomic<long long>total(0);
+mutex mtx;
+
+void unsync_sum(int arr[], int id) {
+	int flow_size = n / thread_count;
+	int start = id * flow_size;
+	int end = 0;
+	if(id == thread_count - 1){
+		end = n;
+	} else{
+		end = (id + 1) * flow_size;
+	}
+	long long local_sum = 0;
+	for(int i = start; i < end; ++i){
+		local_sum += arr[i];
+	}
+	result[id] = local_sum;
+}
+
+void mutex_sum(int arr[], int id){
+	int flow_size = n / thread_count;
+		int start = id * flow_size;
+		int end = 0;
+		if(id == thread_count - 1){
+			end = n;
+		} else{
+			end = (id + 1) * flow_size;
+		}
+		long long local_sum = 0;
+		for(int i = start; i < end; ++i){
+			local_sum += arr[i];
+		}
+		lock_guard<mutex> lock(mtx);
+		sum += local_sum;
+}
+
+void atomic_sum(int arr[], int id){
+	int flow_size = n / thread_count;
+		int start = id * flow_size;
+		int end = 0;
+		if(id == thread_count - 1){
+			end = n;
+		} else{
+			end = (id + 1) * flow_size;
+		}
+		long long local_sum = 0;
+		for(int i = start; i < end; ++i){
+			local_sum += arr[i];
+		}
+		total += local_sum;
+}
+
+int main() {
+	    vector<thread> threads;
+	    std::random_device rd;
+	    mt19937 gen(rd());
+	    uniform_int_distribution<int> dist(0, 100);
+
+	    for (int i = 0; i < n; ++i){
+	    	arr[i] = dist(gen);
+	    }
+
+	    auto start_unsync = high_resolution_clock::now();
+	    for (int i = 0; i < thread_count; ++i) {
+	    threads.emplace_back(unsync_sum, arr, i);
+	    }
+
+	    for (auto &t : threads){
+	    	t.join();
+	    }
+	    long long sum_unsync = 0;
+	    	for(int part : result){
+	    		sum_unsync += part;
+	    	 }
+	    auto end_unsync = high_resolution_clock::now();
+	    threads.clear();
+	    cout<<"The sum of all numbers: "<<sum_unsync<<endl;
+	    cout << "Time of unsync computing: " << duration_cast<nanoseconds>(end_unsync - start_unsync).count() << " ns" << endl;
+
+	    auto start_mutex = high_resolution_clock::now();
+	    sum = 0;
+	    for (int i = 0; i < thread_count; ++i) {
+	    	threads.emplace_back(mutex_sum, arr, i);
+	    }
+
+	    for (auto &t : threads){
+	    	t.join();
+	    }
+	    auto end_mutex = high_resolution_clock::now();
+	    threads.clear();
+	    cout<<"The sum of all numbers: "<<sum<<endl;
+	    cout << "Time of mutex computing: " << duration_cast<nanoseconds>(end_mutex - start_mutex).count() << " ns" << endl;
+
+	    auto start_atomic = high_resolution_clock::now();
+	    for (int i = 0; i < thread_count; ++i) {
+	    	threads.emplace_back(atomic_sum, arr, i);
+	    }
+
+	    for (auto &t : threads){
+	    	t.join();
+	    }
+	    auto end_atomic = high_resolution_clock::now();
+	    cout<<"The sum of all numbers: "<<total<<endl;
+	    cout << "Time of atomic computing: " << duration_cast<nanoseconds>(end_atomic - start_atomic).count() << " ns" << endl;
+	    return 0;
+}
+
