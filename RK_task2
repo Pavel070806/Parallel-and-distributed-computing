@@ -1,0 +1,72 @@
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <queue>
+#include <vector>
+#include <chrono>
+#include <random>
+#include <condition_variable>
+
+constexpr int num_workers = 5;
+constexpr int queue_capacity = 5;
+
+std::mutex queue_mtx;
+std::mutex cout_mtx;
+std::queue<int> queue1, queue2;
+std::condition_variable queue_cv;
+int available_workers = num_workers;
+
+void worker(int id) {
+    while (true) {
+        int task = -1;
+
+        {
+            std::unique_lock<std::mutex> lock(queue_mtx);
+            queue_cv.wait(lock, [] { return available_workers > 0; });
+
+            if (!queue1.empty()) {
+                task = queue1.front();
+                queue1.pop();
+            } else if (!queue2.empty()) {
+                task = queue2.front();
+                queue2.pop();
+            } else {
+                break;
+            }
+
+            --available_workers;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(cout_mtx);
+            std::cout << "Рабочий " << id << " выполняет задачу " << task << "." << std::endl;
+        }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1 + rand() % 3));
+
+        {
+            std::lock_guard<std::mutex> lock(queue_mtx);
+            ++available_workers;
+        }
+        queue_cv.notify_one();
+    }
+}
+
+int main() {
+    for (int i = 1; i <= queue_capacity; ++i) {
+        queue1.push(i);
+        queue2.push(i + queue_capacity);
+    }
+
+    std::vector<std::thread> workers;
+    for (int i = 0; i < num_workers; ++i) {
+        workers.emplace_back(worker, i + 1);
+    }
+
+    for (auto& w : workers) {
+        w.join();
+    }
+
+    std::cout << "Все задачи выполнены!" << std::endl;
+    return 0;
+}
