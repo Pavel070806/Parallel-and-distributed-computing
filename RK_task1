@@ -1,0 +1,39 @@
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+
+constexpr int STAGES = 4;
+
+std::mutex mtx;
+std::condition_variable cv;
+std::atomic<int> current_stage(0);
+
+void processStage(int stage) {
+    std::unique_lock<std::mutex> lock(mtx);
+
+    cv.wait(lock, [stage] { return current_stage.load() == stage; });
+
+    std::cout << "Этап " << stage + 1 << " выполняется." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    current_stage.fetch_add(1);
+
+    cv.notify_all();
+}
+
+int main() {
+    std::thread stages[STAGES];
+
+    for (int i = 0; i < STAGES; ++i) {
+        stages[i] = std::thread(processStage, i);
+    }
+
+    for (int i = 0; i < STAGES; ++i) {
+        stages[i].join();
+    }
+
+    std::cout << "Все этапы завершены!" << std::endl;
+    return 0;
+}
