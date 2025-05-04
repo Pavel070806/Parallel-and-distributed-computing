@@ -1,0 +1,33 @@
+#include <boost/asio.hpp>
+#include <iostream>
+
+using boost::asio::ip::tcp;
+
+int main() {
+    try {
+        boost::asio::io_context io_context;
+        tcp::socket socket(io_context);
+        socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 12345));
+
+        while (true) {
+            std::cout << "Введите число для вычисления факториала: ";
+            std::string input;
+            std::getline(std::cin, input);
+            if (input.empty()) break;
+
+            boost::asio::write(socket, boost::asio::buffer(input + "\n"));
+
+            boost::asio::streambuf response;
+            boost::asio::read_until(socket, response, '\n');
+
+            std::istream is(&response);
+            std::string line;
+            std::getline(is, line);
+            std::cout << "Ответ от сервера: " << line << "\n";
+        }
+    } catch (std::exception& e) {
+        std::cerr << "Exception: " << e.what() << "\n";
+    }
+    return 0;
+}
+

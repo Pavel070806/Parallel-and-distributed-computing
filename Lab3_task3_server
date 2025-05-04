@@ -1,0 +1,62 @@
+#include <boost/asio.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <thread>
+
+using boost::asio::ip::tcp;
+using namespace std::chrono_literals;
+
+void handle_client(tcp::socket socket) {
+    auto io_ptr = std::make_shared<boost::asio::io_context>();
+    auto timer = std::make_shared<boost::asio::steady_timer>(*io_ptr);
+    auto sock_ptr = std::make_shared<tcp::socket>(std::move(socket));
+
+    try {
+        boost::asio::streambuf buf;
+        boost::asio::read_until(*sock_ptr, buf, '\n');
+
+        std::istream input(&buf);
+        std::string message;
+        std::getline(input, message);
+
+        int delay_seconds = 3;
+        if (message.rfind("ping", 0) == 0) { 
+            std::istringstream iss(message);
+            std::string cmd;
+            iss >> cmd >> delay_seconds;
+            if (delay_seconds <= 0) delay_seconds = 3;
+        }
+
+        std::cout << "Получено: " << message << ", задержка: " << delay_seconds << " сек\n";
+
+        timer->expires_after(std::chrono::seconds(delay_seconds));
+        timer->async_wait([sock_ptr](const boost::system::error_code& ec) {
+            if (!ec) {
+                std::string response = "pong\n";
+                boost::asio::write(*sock_ptr, boost::asio::buffer(response));
+            }
+        });
+
+        io_ptr->run();
+    } catch (std::exception& e) {
+        std::cerr << "Ошибка клиента: " << e.what() << std::endl;
+    }
+}
+
+int main() {
+    try {
+        boost::asio::io_context io;
+        tcp::acceptor acceptor(io, tcp::endpoint(tcp::v4(), 1236));
+        std::cout << "Сервер асинхронного таймера запущен на порту 1236.\n";
+
+        while (true) {
+            tcp::socket socket(io);
+            acceptor.accept(socket);
+            std::thread(handle_client, std::move(socket)).detach();
+        }
+    } catch (std::exception& e) {
+        std::cerr << "Ошибка сервера: " << e.what() << std::endl;
+    }
+}

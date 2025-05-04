@@ -1,0 +1,41 @@
+#include <boost/asio.hpp>
+#include <iostream>
+#include <string>
+#include <algorithm>
+
+using boost::asio::ip::tcp;
+
+int main() {
+    try {
+        boost::asio::io_context io;
+        tcp::acceptor acceptor(io, tcp::endpoint(tcp::v4(), 1234));
+
+        std::cout << "Сервер запущен. Ожидание подключений..." << std::endl;
+
+        while (true) {
+            tcp::socket socket(io);
+            acceptor.accept(socket);
+
+            std::cout << "Клиент подключён.\n";
+
+            boost::asio::streambuf buf;
+            boost::asio::read_until(socket, buf, '\n');
+
+            std::istream input(&buf);
+            std::string message;
+            std::getline(input, message);
+
+            std::cout << "Получено: " << message << std::endl;
+
+            std::transform(message.begin(), message.end(), message.begin(), ::toupper);
+            message += '\n';
+
+            boost::asio::write(socket, boost::asio::buffer(message));
+            std::cout << "Отправлено: " << message;
+        }
+    } catch (std::exception& e) {
+        std::cerr << "Ошибка сервера: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
